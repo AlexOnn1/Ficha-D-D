@@ -1,10 +1,8 @@
-// app.js atualizado
 console.log('Iniciando aplicação...');
+
 document.addEventListener('DOMContentLoaded', async () => {
-    
-    const apiBase = 'https://api.open5e.com/';
-    
-    
+    const apiBase = 'https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data/class/';
+
     class CharacterSheet {
         constructor() {
             this.abilities = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -14,187 +12,199 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async init() {
-            await this.loadData();
+            await this.loadClassList();
             this.setupEventListeners();
             this.calculateAll();
         }
 
-        async loadData() {
-            try {
-                const response = await axios.get(apiBase + 'classes/');
-                console.log('Dados crus:', response.data);
-                
-                this.gameData = {
-                    classes: response.data.filter(c => 
-                        c.document__slug === 'wotc-srd' || 
-                        c.document__slug === 'tce'
-                    ),
-                    subclasses: []
-                };
-                
-                console.log('Classes filtradas:', this.gameData.classes);
-                this.populateClassSelect();
-                
-            } catch (error) {
-                console.error('Erro final:', error);
-                alert('Sistema temporariamente indisponível. Tente recarregar (CTRL+F5).');
-            }
+      // Carregar lista de classes a partir do index.json
+async loadClassList() {
+    try {
+        const response = await axios.get(`${apiBase}index.json`);
+
+        // Log para verificar todas as chaves da resposta da API
+        console.log('Estrutura completa da resposta da API:', response.data);
+
+        // Aqui logamos as chaves para visualizar melhor a estrutura
+        console.log('Chaves disponíveis na resposta:', Object.keys(response.data));
+
+        // Tentar acessar as classes de uma maneira mais flexível
+        const classList = response.data; // Agora estamos diretamente acessando o objeto com as chaves das classes
+
+        // Verifique a estrutura e os dados
+        console.log('Estrutura das classes:', classList);
+
+        if (!classList || Object.keys(classList).length === 0) {
+            throw new Error('Nenhuma classe encontrada.');
         }
 
-        populateClassSelect() {
-            const classSelect = document.getElementById('classSelect');
-            classSelect.innerHTML = '<option value="">Selecione uma classe</option>';
-            
-            this.gameData.classes.forEach(cls => {
-                const option = document.createElement('option');
-                option.value = cls.slug; // Usar slug oficial da API
-                option.textContent = cls.name;
-                classSelect.appendChild(option);
-            });
-        }
+        this.gameData = {
+            classes: Object.keys(classList) // Usando as chaves do objeto para preencher as classes
+        };
 
-        async loadSubclasses(className) {
-            try {
-                const proxy = 'https://cors-anywhere.herokuapp.com/';
-                const response = await axios.get(
-                    `${proxy}https://5e-bits.github.io/api/subclasses/${className.toLowerCase()}.json`
-                );
-                return response.data;
-            } catch (error) {
-                console.error('Error loading subclasses:', error);
-                return [];
-            }
-        }
+        // Popular o dropdown de classes
+        this.populateClassSelect();
+        
+    } catch (error) {
+        console.error('Erro ao carregar classes:', error);
+        alert('Erro ao carregar classes! Verifique o console (F12) para mais detalhes.');
+    }
+}
 
-        async loadClassFeatures(className) {
-            try {
-                const classData = this.gameData.classes.find(c => c.name === className);
-                const response = await axios.get(apiBase + `classes/${classData.slug}/`);
-                
-                this.currentClass = response.data;
-                this.updateClassFeatures();
-                this.updateProficiencies();
-                this.updateSavingThrows();
-                
-            } catch (error) {
-                console.error('Erro detalhado:', error);
-                alert(`Detalhes de ${className} não disponíveis!`);
-            }
-        }
+// Popular o dropdown com as opções de classes
+populateClassSelect() {
+    const classSelect = document.getElementById('classSelect');
+    classSelect.innerHTML = '<option value="">Selecione uma classe</option>';
+    
+    // Preencher o dropdown com base nas classes disponíveis no index.json
+    this.gameData.classes.forEach(cls => {
+        const option = document.createElement('option');
+        
+        // Aqui vamos garantir que estamos passando o nome correto da classe para o valor
+        option.value = cls; // Usando o nome da chave da classe
+        option.textContent = cls.charAt(0).toUpperCase() + cls.slice(1); // Capitalizando a primeira letra
+        
+        classSelect.appendChild(option);
+    });
+}
 
+// Carregar detalhes da classe selecionada
+async loadClassFeatures(className) {
+    try {
+        const classSlug = className.toLowerCase(); // Garantir que estamos trabalhando com uma string válida
+        const detailsUrl = `${apiBase}${response.data[classSlug]}`; // Usando a URL da classe selecionada
+
+        const classResponse = await axios.get(detailsUrl);
+        this.currentClass = classResponse.data;
+
+        console.log('Classe carregada:', this.currentClass);
+        this.updateClassFeatures();
+        this.updateProficiencies();
+        this.updateSavingThrows();
+        
+    } catch (error) {
+        console.error('Erro ao carregar recursos da classe:', error);
+        alert('Erro ao carregar detalhes da classe!');
+    }
+}
+
+        // Atualizar os recursos de classe com base no nível
         updateClassFeatures() {
             const resourcesContainer = document.getElementById('classResources');
             resourcesContainer.innerHTML = '';
-            
-            // Recursos principais
-            const mainFeatures = this.currentClass.features
-                .filter(f => f.level === this.characterLevel)
+
+            if(!this.currentClass?.feature) return;
+
+            const features = this.currentClass.feature
+                .filter(f => f.gainedAt?.level === this.characterLevel)
                 .map(f => this.createFeatureElement(f));
-            
-            // Recursos de subclasse (se aplicável)
-            const subclassFeatures = this.currentClass.subclasses
-                .flatMap(sc => sc.features)
-                .filter(f => f.level === this.characterLevel)
-                .map(f => this.createFeatureElement(f));
-            
-            [...mainFeatures, ...subclassFeatures].forEach(feature => {
+
+            features.forEach(feature => {
                 resourcesContainer.appendChild(feature);
             });
         }
 
+        // Criar um item de recurso de classe
         createFeatureElement(feature) {
             const div = document.createElement('div');
             div.className = 'feature-item';
             div.innerHTML = `
-                <h4>${feature.name} (Nível ${feature.level})</h4>
-                <p>${feature.desc}</p>
+                <h4>${feature.name}</h4>
+                <p>${feature.entries.join('<br>')}</p>
             `;
             return div;
         }
-        // Adicionar cálculo dos modificadores de atributo
-calculateAll() {
-    this.abilities.forEach(ability => {
-        const score = parseInt(document.querySelector(`[data-ability="${ability}"] .score`).value) || 10;
-        const mod = Math.floor((score - 10) / 2);
-        document.querySelector(`[data-ability="${ability}"] .mod`).textContent = mod >= 0 ? `+${mod}` : mod;
-    });
-}
 
+        // Atualizar as proficiências do personagem
         updateProficiencies() {
             const skillList = document.querySelector('.skill-list');
             skillList.innerHTML = '';
-            
-            // Proficiências de armadura/armas
-            const proficiencies = this.currentClass.proficiencies;
-            const proficienciesHTML = proficiencies.map(p => `
-                <div class="proficiency-item">
-                    <input type="checkbox" checked disabled>
-                    <label>${p.name}</label>
-                </div>
-            `).join('');
-            
-            // Perícias selecionáveis
-            const skillOptions = this.currentClass.proficiency_choices
-                .find(p => p.type === 'skills')?.from || [];
-            
-            const skillsHTML = skillOptions.map(skill => `
-                <div class="skill-option">
-                    <input type="checkbox" name="selectedSkills">
-                    <label>${skill.name}</label>
-                </div>
-            `).join('');
-        
+
+            if(!this.currentClass) return;
+
+            const proficienciesHTML = (this.currentClass.proficiency || [])
+                .map(p => `
+                    <div class="proficiency-item">
+                        <input type="checkbox" checked disabled>
+                        <label>${p}</label>
+                    </div>
+                `).join('');
+
+            const skillChoices = (this.currentClass.skillProficiencies || [])
+                .map(choice => `
+                    <div class="skill-choice">
+                        <h4>Escolha ${choice.choose} entre:</h4>
+                        ${choice.from.map(skill => `
+                            <div class="skill-option">
+                                <input type="checkbox" name="selectedSkills">
+                                <label>${skill}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('');
+
             skillList.innerHTML = `
-                <h4>Proficiências Iniciais</h4>
+                <h3>Proficiências</h3>
                 ${proficienciesHTML}
-                <h4>Escolha ${this.currentClass.proficiency_choices[0]?.choose} perícias:</h4>
-                ${skillsHTML}
+                ${skillChoices}
             `;
         }
 
+        // Atualizar as jogadas de resistência
         updateSavingThrows() {
             const savingThrows = document.querySelector('.saving-throws');
-            savingThrows.innerHTML = this.currentClass.saving_throws
+            savingThrows.innerHTML = (this.currentClass?.savingThrows || [])
                 .map(ab => `
                     <div class="saving-throw">
                         <input type="checkbox" checked disabled>
-                        <label>${ab.name.toUpperCase()}</label>
+                        <label>${ab.toUpperCase()}</label>
                     </div>
                 `).join('');
         }
 
+        // Calcular bônus de proficiência
         calculateProficiencyBonus() {
-            return Math.floor(2 + (this.characterLevel - 1)/4);
+            return Math.ceil(2 + this.characterLevel/4);
         }
 
+        // Calcular modificadores de atributos
+        calculateAll() {
+            this.abilities.forEach(ability => {
+                const score = parseInt(document.querySelector(`[data-ability="${ability}"] .score`).value) || 10;
+                const mod = Math.floor((score - 10) / 2);
+                document.querySelector(`[data-ability="${ability}"] .mod`).textContent = mod >= 0 ? `+${mod}` : mod;
+            });
+        }
+
+        // Configuração de eventos
         setupEventListeners() {
-            // Event listeners para atributos
+            // Atualizar modificadores de atributo
             this.abilities.forEach(ability => {
                 document.querySelector(`[data-ability="${ability}"] .score`)
                     .addEventListener('input', () => this.calculateAll());
             });
-        
-            // Evento de seleção de classe
+
+            // Seleção de classe
             document.getElementById('classSelect').addEventListener('change', (e) => {
-                this.loadClassFeatures(e.target.value);
+                if(e.target.value) this.loadClassFeatures(e.target.value);
             });
-        
-            // Evento de mudança de nível
+
+            // Controle de nível
             document.getElementById('characterLevel').addEventListener('input', (e) => {
-                this.characterLevel = parseInt(e.target.value) || 1;
+                this.characterLevel = Math.max(1, Math.min(20, parseInt(e.target.value) || 1));
+                e.target.value = this.characterLevel;
                 document.getElementById('profBonus').textContent = `+${this.calculateProficiencyBonus()}`;
-                if(this.currentClass) this.updateClassFeatures();
+                this.updateClassFeatures();
             });
-        
-            // Evento de level up
+
+            // Botão de level up
             document.getElementById('levelUpButton').addEventListener('click', () => {
                 this.characterLevel = Math.min(20, this.characterLevel + 1);
                 document.getElementById('characterLevel').value = this.characterLevel;
                 document.getElementById('profBonus').textContent = `+${this.calculateProficiencyBonus()}`;
-                if(this.currentClass) this.updateClassFeatures();
+                this.updateClassFeatures();
             });
         }
-        
     }
 
     new CharacterSheet();
