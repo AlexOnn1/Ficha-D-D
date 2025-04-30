@@ -1,0 +1,98 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Ficha de Personagem 5e Interativa</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="sheet-header">
+            <h1 contenteditable="true">Nome do Personagem</h1>
+            <div class="level-controls">
+                <div>
+                    <label>Classe:</label>
+                    <select id="classSelect" class="class-selector">
+                        <option value="">Selecione uma classe</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label>Nível:</label>
+                    <input type="number" id="characterLevel" min="1" max="20" value="1">
+                    <button id="levelUpButton">Level Up!</button>
+                </div>
+            </div>
+            <div class="basic-info">
+                <input type="text" placeholder="Antecedente" id="background">
+                <input type="text" placeholder="Nome do Jogador" id="playerName">
+            </div>
+        </header>
+
+        <div class="grid-container">
+            <!-- Atributos Principais -->
+            <section class="attributes">
+                <div class="ability" data-ability="str">
+                    <h3>FORÇA <span class="mod"></span></h3>
+                    <input type="number" class="score">
+                </div>
+                <div class="ability" data-ability="dex">
+                    <h3>DESTREZA <span class="mod"></span></h3>
+                    <input type="number" class="score">
+                </div>
+                <div class="ability" data-ability="con">
+                    <h3>CONSTITUIÇÃO <span class="mod"></span></h3>
+                    <input type="number" class="score">
+                </div>
+                <div class="ability" data-ability="int">
+                    <h3>INTELIGÊNCIA <span class="mod"></span></h3>
+                    <input type="number" class="score">
+                </div>
+                <div class="ability" data-ability="wis">
+                    <h3>SABEDORIA <span class="mod"></span></h3>
+                    <input type="number" class="score">
+                </div>
+                <div class="ability" data-ability="cha">
+                    <h3>CARISMA <span class="mod"></span></h3>
+                    <input type="number" class="score">
+                </div>
+            </section>
+
+            <!-- Perícias e Resistências -->
+            <section class="skills">
+                <div class="proficiency-bonus">
+                    <label>Bônus de Proficiência: <span id="profBonus">+2</span></label>
+                </div>
+                <div class="saving-throws"></div>
+                <div class="skill-list"></div>
+            </section>
+
+            <!-- Combate -->
+            <section class="combat">
+                <div class="ac-init-speed">
+                    <div class="ac">
+                        <label>CA</label>
+                        <input type="number" id="ac">
+                    </div>
+                    <!-- Outros campos de combate -->
+                </div>
+            </section>
+            <!-- Features -->
+            <section class="class-features">
+                <h2>Recursos de Classe</h2>
+                <div id="classResources"></div>
+            </section>
+
+            <!-- Seção de Magias -->
+            <section class="spellcasting">
+                <div class="spell-slots"></div>
+                <div class="spells-known"></div>
+            </section>
+        </div>
+
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <script src="app.js"></script>
+    </div>
+</body>
+</html>
