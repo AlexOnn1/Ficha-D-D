@@ -1,6 +1,9 @@
 // app.js atualizado
+console.log('Iniciando aplicação...');
 document.addEventListener('DOMContentLoaded', async () => {
-    const apiBase = 'https://5e-bits.github.io/api/';
+    
+    const proxyUrl = 'https://api.allorigins.win/raw?url=';
+const apiBase = 'https://5e-bits.github.io/api/';
     
     class CharacterSheet {
         constructor() {
@@ -18,21 +21,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         async loadData() {
             try {
-                const classesResponse = await axios.get(`${apiBase}classes.json`, {
-                    params: {
-                        source: ['player-handbook', 'tashas-cauldron']
-                    }
-                });
+                const response = await axios.get(proxyUrl + encodeURIComponent(apiBase + 'classes.json'));
+                
+                // Verificar estrutura dos dados
+                const rawData = response.data;
+                const classesArray = rawData.results || rawData.data || []; // Adaptação para estrutura da API
                 
                 this.gameData = {
-                    classes: classes.data,
-                    subclasses: subclasses.data
+                    classes: classesArray.filter(c => 
+                        c.document__title === "Player's Handbook" || 
+                        c.document__title === "Tasha's Cauldron of Everything"
+                    ),
+                    subclasses: []
                 };
                 
+                console.log('Classes carregadas:', this.gameData.classes); // Para debug
                 this.populateClassSelect();
                 
             } catch (error) {
                 console.error('Error loading data:', error);
+                alert('Erro ao carregar classes. Atualize a página (CTRL+F5).');
             }
         }
 
@@ -46,15 +54,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        async loadSubclasses(className) {
+            try {
+                const proxy = 'https://cors-anywhere.herokuapp.com/';
+                const response = await axios.get(
+                    `${proxy}https://5e-bits.github.io/api/subclasses/${className.toLowerCase()}.json`
+                );
+                return response.data;
+            } catch (error) {
+                console.error('Error loading subclasses:', error);
+                return [];
+            }
+        }
+
         async loadClassFeatures(className) {
             try {
-                const response = await axios.get(`${apiBase}classes/${className.toLowerCase()}.json`);
-                this.currentClass = response.data;
+                const [classRes, subRes] = await Promise.all([
+                    axios.get(proxyUrl + encodeURIComponent(`${apiBase}classes/${className.toLowerCase()}.json`)),
+                    axios.get(proxyUrl + encodeURIComponent(`${apiBase}subclasses/${className.toLowerCase()}.json`))
+                ]);
+                
+                this.currentClass = {
+                    ...classRes.data,
+                    subclasses: subRes.data
+                };
+                
                 this.updateClassFeatures();
                 this.updateProficiencies();
                 this.updateSavingThrows();
+                
             } catch (error) {
                 console.error('Error loading class features:', error);
+                alert(`Recursos da classe ${className} não puderam ser carregados!`);
             }
         }
 
