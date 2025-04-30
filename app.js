@@ -2,8 +2,8 @@
 console.log('Iniciando aplicação...');
 document.addEventListener('DOMContentLoaded', async () => {
     
-    const proxyUrl = 'https://api.allorigins.win/raw?url=';
-const apiBase = 'https://5e-bits.github.io/api/';
+    const apiBase = 'https://api.open5e.com/';
+    
     
     class CharacterSheet {
         constructor() {
@@ -21,34 +21,33 @@ const apiBase = 'https://5e-bits.github.io/api/';
 
         async loadData() {
             try {
-                const response = await axios.get(proxyUrl + encodeURIComponent(apiBase + 'classes.json'));
-                
-                // Verificar estrutura dos dados
-                const rawData = response.data;
-                const classesArray = rawData.results || rawData.data || []; // Adaptação para estrutura da API
+                const response = await axios.get(apiBase + 'classes/');
+                console.log('Dados crus:', response.data);
                 
                 this.gameData = {
-                    classes: classesArray.filter(c => 
-                        c.document__title === "Player's Handbook" || 
-                        c.document__title === "Tasha's Cauldron of Everything"
+                    classes: response.data.filter(c => 
+                        c.document__slug === 'wotc-srd' || 
+                        c.document__slug === 'tce'
                     ),
                     subclasses: []
                 };
                 
-                console.log('Classes carregadas:', this.gameData.classes); // Para debug
+                console.log('Classes filtradas:', this.gameData.classes);
                 this.populateClassSelect();
                 
             } catch (error) {
-                console.error('Error loading data:', error);
-                alert('Erro ao carregar classes. Atualize a página (CTRL+F5).');
+                console.error('Erro final:', error);
+                alert('Sistema temporariamente indisponível. Tente recarregar (CTRL+F5).');
             }
         }
 
         populateClassSelect() {
             const classSelect = document.getElementById('classSelect');
+            classSelect.innerHTML = '<option value="">Selecione uma classe</option>';
+            
             this.gameData.classes.forEach(cls => {
                 const option = document.createElement('option');
-                option.value = cls.name;
+                option.value = cls.slug; // Usar slug oficial da API
                 option.textContent = cls.name;
                 classSelect.appendChild(option);
             });
@@ -69,23 +68,17 @@ const apiBase = 'https://5e-bits.github.io/api/';
 
         async loadClassFeatures(className) {
             try {
-                const [classRes, subRes] = await Promise.all([
-                    axios.get(proxyUrl + encodeURIComponent(`${apiBase}classes/${className.toLowerCase()}.json`)),
-                    axios.get(proxyUrl + encodeURIComponent(`${apiBase}subclasses/${className.toLowerCase()}.json`))
-                ]);
+                const classData = this.gameData.classes.find(c => c.name === className);
+                const response = await axios.get(apiBase + `classes/${classData.slug}/`);
                 
-                this.currentClass = {
-                    ...classRes.data,
-                    subclasses: subRes.data
-                };
-                
+                this.currentClass = response.data;
                 this.updateClassFeatures();
                 this.updateProficiencies();
                 this.updateSavingThrows();
                 
             } catch (error) {
-                console.error('Error loading class features:', error);
-                alert(`Recursos da classe ${className} não puderam ser carregados!`);
+                console.error('Erro detalhado:', error);
+                alert(`Detalhes de ${className} não disponíveis!`);
             }
         }
 
