@@ -17,39 +17,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.calculateAll();
         }
 
-      // Carregar lista de classes a partir do index.json
-async loadClassList() {
-    try {
-        const response = await axios.get(`${apiBase}index.json`);
-
-        // Log para verificar todas as chaves da resposta da API
-        console.log('Estrutura completa da resposta da API:', response.data);
-
-        // Aqui logamos as chaves para visualizar melhor a estrutura
-        console.log('Chaves disponíveis na resposta:', Object.keys(response.data));
-
-        // Tentar acessar as classes de uma maneira mais flexível
-        const classList = response.data; // Agora estamos diretamente acessando o objeto com as chaves das classes
-
-        // Verifique a estrutura e os dados
-        console.log('Estrutura das classes:', classList);
-
-        if (!classList || Object.keys(classList).length === 0) {
-            throw new Error('Nenhuma classe encontrada.');
-        }
-
-        this.gameData = {
-            classes: Object.keys(classList) // Usando as chaves do objeto para preencher as classes
-        };
-
-        // Popular o dropdown de classes
-        this.populateClassSelect();
+        async loadClassList() {
+            try {
+                const response = await axios.get(`${apiBase}index.json`);
+                const classMap = response.data;
         
-    } catch (error) {
-        console.error('Erro ao carregar classes:', error);
-        alert('Erro ao carregar classes! Verifique o console (F12) para mais detalhes.');
-    }
-}
+                this.classMap = classMap; // <- Salvando o mapeamento
+        
+                this.gameData = {
+                    classes: Object.keys(classMap) // Ex: ['barbarian', 'wizard', ...]
+                };
+        
+                this.populateClassSelect();
+                
+            } catch (error) {
+                console.error('Erro ao carregar classes:', error);
+                alert('Erro ao carregar classes! Verifique o console (F12) para mais detalhes.');
+            }
+        }
+        
 
 // Popular o dropdown com as opções de classes
 populateClassSelect() {
@@ -68,11 +54,10 @@ populateClassSelect() {
     });
 }
 
-// Carregar detalhes da classe selecionada
 async loadClassFeatures(className) {
     try {
-        const classSlug = className.toLowerCase(); // Garantir que estamos trabalhando com uma string válida
-        const detailsUrl = `${apiBase}${response.data[classSlug]}`; // Usando a URL da classe selecionada
+        const classFile = this.classMap[className]; // <- Aqui pegamos o nome do arquivo, ex: "class-barbarian.json"
+        const detailsUrl = `${apiBase}${classFile}`;
 
         const classResponse = await axios.get(detailsUrl);
         this.currentClass = classResponse.data;
@@ -81,12 +66,13 @@ async loadClassFeatures(className) {
         this.updateClassFeatures();
         this.updateProficiencies();
         this.updateSavingThrows();
-        
+
     } catch (error) {
         console.error('Erro ao carregar recursos da classe:', error);
         alert('Erro ao carregar detalhes da classe!');
     }
 }
+
 
         // Atualizar os recursos de classe com base no nível
         updateClassFeatures() {
