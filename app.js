@@ -2,14 +2,34 @@ console.log('Iniciando aplicação...');
 
 document.addEventListener('DOMContentLoaded', async () => {
     const apiBase = 'https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data/class/';
+    await new Promise(resolve => setTimeout(resolve, 500));
 
+// Traduz um texto do inglês para o português via LibreTranslate
+async function translateToPt(text) {
+    const resp = await fetch('https://libretranslate.com/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: text, 
+        source: 'en', 
+        target: 'pt',
+        format: 'text'
+      })
+    });
+    const data = await resp.json();
+    return data.translatedText;
+  }
+  
     class CharacterSheet {
         constructor() {
             this.abilities = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
             this.currentClass = null;
             this.characterLevel = 1;
             this.init();
+            this.featureCache = {}; // Evita múltiplas requisições do mesmo arquivo
         }
+
+        
 
         async init() {
             await this.loadClassList();
@@ -56,85 +76,143 @@ populateClassSelect() {
 
 async loadClassFeatures(className) {
     try {
-        const classFile = this.classMap[className]; // <- Aqui pegamos o nome do arquivo, ex: "class-barbarian.json"
-        const detailsUrl = `${apiBase}${classFile}`;
-
-        const classResponse = await axios.get(detailsUrl);
-        this.currentClass = classResponse.data;
-
-        console.log('Classe carregada:', this.currentClass);
-        this.updateClassFeatures();
-        this.updateProficiencies();
-        this.updateSavingThrows();
-
+      const classFile = this.classMap[className];
+      const detailsUrl = `${apiBase}${classFile}`;
+  
+      // Requisição à API
+      const response = await axios.get(detailsUrl);
+      const raw = response.data;
+  
+      // Encontrar a classe correta dentro do array raw.class[]
+      const matched = raw.class.find(c => c.name.toLowerCase() === className.toLowerCase());
+      if (!matched) {
+        console.warn(`Classe ${className} não encontrada em ${classFile}`);
+        return;
+      }
+  
+      // Montar currentClass com propriedades úteis
+      this.currentClass = {
+        ...matched,
+        savingThrows: matched.savingThrow,
+        proficiency: matched.proficiency || [],
+        classFeatures: matched.classFeatures || [] // array de strings
+      };
+  
+      // Guardar todas as descrições completas de features
+      this.allClassFeatures = raw.classFeature || [];
+  
+      console.log('Classe carregada:', this.currentClass);
+  
+      // Atualizar a interface
+      this.updateClassFeatures();
+      this.updateProficiencies();
+      this.updateSavingThrows();
+  
     } catch (error) {
-        console.error('Erro ao carregar recursos da classe:', error);
-        alert('Erro ao carregar detalhes da classe!');
+      console.error('Erro ao carregar recursos da classe:', error);
+      alert('Erro ao carregar detalhes da classe!');
     }
+  }
+  
+  // Atualiza os recursos de classe com base no nível
+  updateClassFeatures() {
+    const container = document.getElementById('classResources');
+    container.innerHTML = '';
+  
+    const rawFeats = this.currentClass.classFeatures || [];
+    const allDetails = this.allClassFeatures;
+    if (!rawFeats.length || !allDetails.length) {
+      console.warn('Sem dados de features carregados.');
+      return;
+    }
+  
+    // Parse das strings no formato 'Name|Class||Level'
+    const parsed = (this.currentClass.classFeatures || [])
+  .filter(s => typeof s === 'string' && s.includes('|'))
+  .map(s => {
+    const [name, /*classe*/, , levelStr] = s.split('|');
+    return {
+      name: name.trim(),
+      level: parseInt(levelStr || '1')
+    };
+  })
+  .filter(f => f.level <= this.characterLevel);
+
+parsed.forEach(f => {
+  const detailed = this.allClassFeatures.find(df => df.name === f.name);
+  if (!detailed) {
+    console.warn(`Descrição não encontrada para: ${f.name}`);
+    return;
+  }
+  
+      const div = document.createElement('div');
+      div.className = 'feature-item';
+      const entries = (detailed.entries || []).map(e =>
+        typeof e === 'string'
+          ? e
+          : e.name && e.entries
+            ? `<strong>${e.name}</strong>: ${e.entries.join('<br>')}`
+            : JSON.stringify(e)
+      ).join('<br>');
+  
+      div.innerHTML = `<h4>${detailed.name} (Nível ${f.level})</h4><p>${entries}</p>`;
+      container.appendChild(div);
+    });
+  }
+  
+
+
+
+
+
+
+
+createFeatureElement(feature) {
+    const div = document.createElement('div');
+    div.className = 'feature-item';
+
+    // As entries podem vir como string ou como objetos mais complexos
+    let content = '';
+    if (Array.isArray(feature.entries)) {
+        content = feature.entries.map(e => {
+            if (typeof e === 'string') return e;
+            if (e.name && e.entries) {
+                return `<strong>${e.name}</strong>: ${e.entries.join('<br>')}`;
+            }
+            return JSON.stringify(e); // fallback
+        }).join('<br>');
+    } else {
+        content = feature.entries || '';
+    }
+
+    div.innerHTML = `
+        <h4>${feature.name} (Nível ${feature.level})</h4>
+        <p>${content}</p>
+    `;
+    return div;
 }
 
 
-        // Atualizar os recursos de classe com base no nível
-        updateClassFeatures() {
-            const resourcesContainer = document.getElementById('classResources');
-            resourcesContainer.innerHTML = '';
+updateProficiencies() {
+    const skillList = document.querySelector('.skill-list');
+    skillList.innerHTML = '';
 
-            if(!this.currentClass?.feature) return;
+    if (!this.currentClass?.proficiency) return;
 
-            const features = this.currentClass.feature
-                .filter(f => f.gainedAt?.level === this.characterLevel)
-                .map(f => this.createFeatureElement(f));
+    const proficienciesHTML = this.currentClass.proficiency
+        .map(p => `
+            <div class="proficiency-item">
+                <input type="checkbox" checked disabled>
+                <label>${p}</label>
+            </div>
+        `).join('');
 
-            features.forEach(feature => {
-                resourcesContainer.appendChild(feature);
-            });
-        }
+    skillList.innerHTML = `
+        <h3>Proficiências</h3>
+        ${proficienciesHTML}
+    `;
+}
 
-        // Criar um item de recurso de classe
-        createFeatureElement(feature) {
-            const div = document.createElement('div');
-            div.className = 'feature-item';
-            div.innerHTML = `
-                <h4>${feature.name}</h4>
-                <p>${feature.entries.join('<br>')}</p>
-            `;
-            return div;
-        }
-
-        // Atualizar as proficiências do personagem
-        updateProficiencies() {
-            const skillList = document.querySelector('.skill-list');
-            skillList.innerHTML = '';
-
-            if(!this.currentClass) return;
-
-            const proficienciesHTML = (this.currentClass.proficiency || [])
-                .map(p => `
-                    <div class="proficiency-item">
-                        <input type="checkbox" checked disabled>
-                        <label>${p}</label>
-                    </div>
-                `).join('');
-
-            const skillChoices = (this.currentClass.skillProficiencies || [])
-                .map(choice => `
-                    <div class="skill-choice">
-                        <h4>Escolha ${choice.choose} entre:</h4>
-                        ${choice.from.map(skill => `
-                            <div class="skill-option">
-                                <input type="checkbox" name="selectedSkills">
-                                <label>${skill}</label>
-                            </div>
-                        `).join('')}
-                    </div>
-                `).join('');
-
-            skillList.innerHTML = `
-                <h3>Proficiências</h3>
-                ${proficienciesHTML}
-                ${skillChoices}
-            `;
-        }
 
         // Atualizar as jogadas de resistência
         updateSavingThrows() {
