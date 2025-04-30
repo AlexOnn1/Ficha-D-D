@@ -25,6 +25,11 @@ async function translateToPt(text) {
             this.abilities = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
             this.currentClass = null;
             this.characterLevel = 1;
+            this.translations = {
+                features: {},   // vai receber classFeatures.json
+                spells: {},     // vai receber spells.json
+                attacks: {}     // vai receber attacks.json
+              };
             this.init();
             this.featureCache = {}; // Evita múltiplas requisições do mesmo arquivo
         }
@@ -35,6 +40,8 @@ async function translateToPt(text) {
             await this.loadClassList();
             this.setupEventListeners();
             this.calculateAll();
+            // await this.loadTranslations();
+        // await this.loadClassList();
         }
 
         async loadClassList() {
@@ -95,13 +102,25 @@ async loadClassFeatures(className) {
         ...matched,
         savingThrows: matched.savingThrow,
         proficiency: matched.proficiency || [],
-        classFeatures: matched.classFeatures || [] // array de strings
+        classFeatures: matched.classFeatures || []
       };
+  
+      // 🔧 Preencher classFeatureRefs corretamente
+      this.classFeatureRefs = (matched.classFeatures || [])
+        .filter(s => typeof s === 'string' && s.includes('|'))
+        .map(s => {
+          const [name,, , levelStr] = s.split('|');
+          return {
+            name: name.trim(),
+            level: parseInt(levelStr, 10) || 1
+          };
+        });
   
       // Guardar todas as descrições completas de features
       this.allClassFeatures = raw.classFeature || [];
   
       console.log('Classe carregada:', this.currentClass);
+      console.log('Refs gerados:', this.classFeatureRefs);
   
       // Atualizar a interface
       this.updateClassFeatures();
@@ -114,50 +133,74 @@ async loadClassFeatures(className) {
     }
   }
   
+  
   // Atualiza os recursos de classe com base no nível
   updateClassFeatures() {
-    const container = document.getElementById('classResources');
-    container.innerHTML = '';
+    // 1) Pega o iframe e seu documento
+    const iframe = document.getElementById('featuresFrame');
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
   
-    const rawFeats = this.currentClass.classFeatures || [];
-    const allDetails = this.allClassFeatures;
-    if (!rawFeats.length || !allDetails.length) {
+    // 2) Inicializa o HTML do iframe
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body { font-family: sans-serif; margin:0; padding:10px; }
+            .feature-item { margin-bottom:1em; border-bottom:1px solid #ddd; padding-bottom:1em; }
+            h4 { margin:0 0 .5em; }
+          </style>
+        </head>
+        <body></body>
+      </html>
+    `);
+    doc.close();
+  
+    // 3) Se não houver referências ou descrições, sai
+    const refs = this.classFeatureRefs || [];
+    if (!refs.length || !this.allClassFeatures.length) {
       console.warn('Sem dados de features carregados.');
       return;
     }
   
-    // Parse das strings no formato 'Name|Class||Level'
-    const parsed = (this.currentClass.classFeatures || [])
-  .filter(s => typeof s === 'string' && s.includes('|'))
-  .map(s => {
-    const [name, /*classe*/, , levelStr] = s.split('|');
-    return {
-      name: name.trim(),
-      level: parseInt(levelStr || '1')
-    };
-  })
-  .filter(f => f.level <= this.characterLevel);
-
-parsed.forEach(f => {
-  const detailed = this.allClassFeatures.find(df => df.name === f.name);
-  if (!detailed) {
-    console.warn(`Descrição não encontrada para: ${f.name}`);
-    return;
-  }
+    // 4) Filtra só até o nível atual
+    const granted = refs.filter(f => f.level <= this.characterLevel);
+    if (!granted.length) {
+      console.warn('Nenhuma feature para nível', this.characterLevel);
+      return;
+    }
   
-      const div = document.createElement('div');
+    // 5) Cria container e popula
+    const container = doc.createElement('div');
+    granted.forEach(f => {
+      const detail = this.allClassFeatures.find(df => df.name === f.name);
+      if (!detail) {
+        console.warn(`Descrição não encontrada para: ${f.name}`);
+        return;
+      }
+      const entriesHtml = (detail.entries || [])
+        .map(e =>
+          typeof e === 'string'
+            ? e
+            : (e.name && e.entries)
+              ? `<strong>${e.name}</strong>: ${e.entries.join('<br>')}`
+              : JSON.stringify(e)
+        )
+        .join('<br><br>');
+  
+      const div = doc.createElement('div');
       div.className = 'feature-item';
-      const entries = (detailed.entries || []).map(e =>
-        typeof e === 'string'
-          ? e
-          : e.name && e.entries
-            ? `<strong>${e.name}</strong>: ${e.entries.join('<br>')}`
-            : JSON.stringify(e)
-      ).join('<br>');
-  
-      div.innerHTML = `<h4>${detailed.name} (Nível ${f.level})</h4><p>${entries}</p>`;
+      div.innerHTML = `
+        <h4>${detail.name} (Nível ${f.level})</h4>
+        <p>${entriesHtml}</p>
+      `;
       container.appendChild(div);
     });
+  
+    // 6) Insere no body do iframe
+    doc.body.appendChild(container);
   }
   
 
